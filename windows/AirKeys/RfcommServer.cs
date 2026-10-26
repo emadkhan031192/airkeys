@@ -56,12 +56,18 @@ public sealed class RfcommServer : IDisposable
 
     public async Task StartAsync()
     {
+        // Real WinRT API (see Microsoft Learn, RfcommServiceProvider):
+        // CreateAsync -> BindServiceNameAsync on the listener with the
+        // provider's ServiceId -> StartAdvertising(listener). There is no
+        // ServiceName property and no StartAdvertisingAsync on this class.
         _provider = await RfcommServiceProvider.CreateAsync(
             RfcommServiceId.FromUuid(ServiceUuid));
-        _provider.ServiceName = "AirKeys";
         _listener = new StreamSocketListener();
         _listener.ConnectionReceived += OnConnectionReceived;
-        await _provider.StartAdvertisingAsync(_listener, true);
+        await _listener.BindServiceNameAsync(
+            _provider.ServiceId.AsString(),
+            SocketProtectionLevel.BluetoothEncryptionAllowNullAuthentication);
+        _provider.StartAdvertising(_listener);
         _onStatus("Waiting for phone…");
     }
 
