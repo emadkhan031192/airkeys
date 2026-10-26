@@ -46,9 +46,9 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
                 IconButton(onClick = { showSettings = !showSettings }) { Text("⚙") }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                ModeButton("Keyboard", vm.mode == Mode.KEYBOARD) { vm.setMode(Mode.KEYBOARD) }
-                ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.setMode(Mode.TOUCHPAD) }
-                ModeButton("Split", vm.mode == Mode.SPLIT) { vm.setMode(Mode.SPLIT) }
+                ModeButton("Keyboard", vm.mode == Mode.KEYBOARD) { vm.changeMode(Mode.KEYBOARD) }
+                ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.changeMode(Mode.TOUCHPAD) }
+                ModeButton("Split", vm.mode == Mode.SPLIT) { vm.changeMode(Mode.SPLIT) }
                 Spacer(Modifier.weight(1f))
                 if (vm.mode != Mode.KEYBOARD) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {

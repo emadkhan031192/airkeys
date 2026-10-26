@@ -32,7 +32,7 @@ class AirKeysViewModel : ViewModel() {
     init { setStatusListener { status = it } }
     override fun onCleared() { setStatusListener(null); super.onCleared() }
 
-    fun setMode(m: Mode) { mode = m }
+    fun changeMode(m: Mode) { mode = m }
     fun setLocked(l: Boolean) { touchpadLocked = l }
 
     fun toggleModifier(mask: Int) {
