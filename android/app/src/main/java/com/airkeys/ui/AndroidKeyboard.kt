@@ -14,8 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.airkeys.*
 
 /**
@@ -64,11 +64,6 @@ private class RemoteInputConnection(
         if (!text.isNullOrEmpty()) vm.sendTextDirect(text.toString())
         // Do NOT insert locally: the PC already has the text, and
         // keeping the field empty makes backspace deterministic.
-        return true
-    }
-
-    override fun commitCompletion(text: android.view.textservice.TextInfo?): Boolean {
-        if (text != null) vm.sendTextDirect(text.text.toString())
         return true
     }
 
