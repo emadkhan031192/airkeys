@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test
+        run: dotnet test windows/AirKeys.sln -c Release
+      - name: Publish single-file exe
+        run: >
+          dotnet publish windows/AirKeys/AirKeys.csproj -c Release
+          -p:PublishSingleFile=true --self-contained true -r win-x64
+          -o windows-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirKeys-Windows
+          path: windows-out/AirKeys.exe
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+        working-directory: android
+      - name: Build APK
+        run: ./gradlew :app:assembleDebug
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirKeys-Android
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: AirKeys-Windows
+          path: dist-windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: AirKeys-Android
+          path: dist-android
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-windows/AirKeys.exe
+            dist-android/app-debug.apk
+          body: |
+            AirKeys — offline Bluetooth keyboard + touchpad.
+            Install AirKeys.exe on Windows, app-debug.apk on Android,
+            then follow the 5-step setup in README.md.

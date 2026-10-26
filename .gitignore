@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+obj/
+build/
+out/
+*.exe
+*.dll
+*.apk
+*.aab
+*.user
+*.suo
+.vs/
+.idea/
+*.iml
+local.properties
+gradle/
+!gradle/wrapper/
+# OS
+.DS_Store
+Thumbs.db
+# Secrets — never commit these
+*.jks
+*.keystore
+key.properties
+**/pairing.bin
