@@ -5,9 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 
-// v1.3: the Android (Gboard) keyboard and Split modes were removed, as
-// requested. The Smart Keyboard is now the only keyboard.
-enum class Mode { SMART_KEYBOARD, TOUCHPAD }
+// v1.4: Android keyboard is back alongside Smart Keyboard, as requested.
+// (v1.3 removed it; v1.4 restores it with a reliable InputConnection.)
+enum class Mode { KEYBOARD, SMART_KEYBOARD, TOUCHPAD }
 
 /**
  * UI state + input routing. All Bluetooth work goes through the foreground
@@ -22,10 +22,14 @@ class AirKeysViewModel : ViewModel() {
         fun setStatusListener(l: ((String) -> Unit)?) { statusListener = l }
     }
 
-    var mode by mutableStateOf(Mode.SMART_KEYBOARD); private set
+    var mode by mutableStateOf(Mode.KEYBOARD); private set
     var status by mutableStateOf("Disconnected"); private set
     var stickyModifiers by mutableStateOf(0); private set
     var touchpadLocked by mutableStateOf(false); private set
+    /** v1.4: Drag mode, OFF by default. When OFF, touchpad moves never
+     *  hold the left button, so moving the cursor can never select
+     *  text. Turn it ON only when you actually want to drag/select. */
+    var dragMode by mutableStateOf(false); private set
 
     // Hidden keyboard buffer state. The field itself lives in Compose;
     // it always holds one sentinel space (see TextDelta.computeWithSentinel).
@@ -37,6 +41,7 @@ class AirKeysViewModel : ViewModel() {
 
     fun changeMode(m: Mode) { mode = m }
     fun setLocked(l: Boolean) { touchpadLocked = l }
+    fun setDragMode(on: Boolean) { dragMode = on }
 
     fun toggleModifier(mask: Int) {
         stickyModifiers = stickyModifiers xor mask

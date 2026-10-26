@@ -8,15 +8,19 @@ AirKeys turns an Android phone into a wireless keyboard **and** mouse/touchpad
 for a Windows laptop. No internet, no cloud, no account, no relay server,
 no analytics.
 
-**v1.3 (current): Smart Keyboard only, Bluetooth only.** The Android
-(Gboard) keyboard mode and Split mode were removed — the rebuilt Smart
-Keyboard is the only keyboard. It is styled like a phone keyboard
-(white board, black keys, red shift/backspace/enter/arrows, number row
-on top, space row, arrow row) and merges the old Smart Keyboard layout:
-EN / اردو / #@! layouts (bundled Nastaliq font), sticky Ctrl/Alt/Win,
-Esc/Tab/Del, F1–F12, emoji board. Touchpad gains a dedicated scroll
-wheel strip: drag up/down for vertical scroll, left/right for
-horizontal scroll, diagonal for both (two-finger scroll still works).
+**v1.4 (current): both keyboards, bottom-anchored, Bluetooth only.**
+Android KB is back alongside Smart KB (Smart KB kept, screenshot-style
+with EN / اردو / #@!, Nastaliq font, sticky Ctrl/Alt/Win, Esc/Tab/Del,
+F1–F12, emoji). Both keyboards sit at the bottom of the screen.
+Android KB now uses a real EditText InputConnection: Backspace is
+intercepted even on an empty field (the v1.2 sentinel hack was
+unreliable with composing/predictive text), plus a direct ⌫ backup
+button. Touchpad: accidental text selection is fixed — the old 400 ms
+auto hold-drag is gone; Drag is an explicit toggle, OFF by default,
+so normal moves never hold the left button. Scrolling is now two
+tiny separate strips, not one big wheel: a 36 dp vertical strip on
+the right edge (drag ↕) and a 36 dp horizontal bar below the pad
+(drag ↔), mouse-wheel style. Two-finger scroll still works.
 The v1.1 LAN/Auto options stay removed — Bluetooth Classic
 (RFCOMM/SPP) is the only connection choice offered.
 "Connected" is only shown after pairing actually succeeds — a socket that

@@ -20,8 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.airkeys.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+
 
 @Composable
 fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
@@ -45,7 +44,8 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 .horizontalScroll(rememberScrollState())) {
-                ModeButton("Keyboard", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
+                ModeButton("Android KB", vm.mode == Mode.KEYBOARD) { vm.changeMode(Mode.KEYBOARD) }
+                ModeButton("Smart KB", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
                 ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.changeMode(Mode.TOUCHPAD) }
                 Button(onClick = { vm.testInjection() }, modifier = Modifier.padding(end = 4.dp)) {
                     Text("Test A + cursor")
@@ -54,11 +54,19 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {
                         Text(if (vm.touchpadLocked) "🔒 Locked" else "🔓 Lock")
                     }
+                    Button(onClick = { vm.setDragMode(!vm.dragMode) }) {
+                        Text(if (vm.dragMode) "✋ Drag ON" else "Drag OFF")
+                    }
                 }
             }
             when (vm.mode) {
-                // v1.3: Smart Keyboard is the only keyboard.
-                Mode.SMART_KEYBOARD -> SmartKeyboardScreen(vm)
+                // v1.4: both keyboards sit at the bottom, easy to reach.
+                Mode.KEYBOARD -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
+                    AndroidKeyboardScreen(vm)
+                }
+                Mode.SMART_KEYBOARD -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
+                    SmartKeyboardScreen(vm)
+                }
                 Mode.TOUCHPAD -> TouchpadScreen(vm, settings, Modifier.weight(1f))
             }
         }
@@ -152,15 +160,14 @@ fun SettingsDialog(settings: SettingsStore, onDismiss: () -> Unit) {
 @Composable
 fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modifier = Modifier) {
     val view = LocalView.current
-    val scope = rememberCoroutineScope()
     // Recreated when tap-to-click changes, so the new setting takes effect.
     val processor = remember(settings.tapToClick) {
         TouchpadGestureProcessor(sensitivity = settings.sensitivity,
             tapToClickEnabled = settings.tapToClick)
     }
-    var holdJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Column(modifier) {
-        Box(Modifier.weight(1f).fillMaxWidth()
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxHeight()
             .background(Color(0xFF1A1A2E))
             .border(1.dp, Color.Gray)
             .pointerInput(vm.touchpadLocked, settings) {
@@ -187,16 +194,17 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                                     val ev = processor.onPointer(id, PointerAction.DOWN,
                                         change.position.x, change.position.y, now)
                                     dispatch(vm, settings, view, ev)
-                                    if (downIds.size == 1) {
-                                        holdJob?.cancel()
-                                        holdJob = scope.launch {
-                                            delay(400)
-                                            dispatch(vm, settings, view, processor.beginHoldDrag())
-                                        }
+                                    // v1.4: Drag is explicit only. When Drag
+                                    // mode is ON, pressing down starts a
+                                    // drag (left button held) at once; when
+                                    // OFF, no timer ever holds the button,
+                                    // so moving the cursor can never
+                                    // select text by accident.
+                                    if (downIds.size == 1 && vm.dragMode) {
+                                        dispatch(vm, settings, view, processor.beginHoldDrag())
                                     }
                                 }
                                 change.changedToUp() -> {
-                                    holdJob?.cancel()
                                     val wasMulti = downIds.size >= 2
                                     val isQuickMultiTap = wasMulti && !multiMoved &&
                                         (now - multiDownAtMs) <= 250 && settings.tapToClick
@@ -237,17 +245,17 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                     }
                 }
             }) {
-            Text(if (settings.tapToClick) "Touchpad — move, tap, two-finger scroll"
-                   else "Touchpad — move only, use Left / Right buttons to click",
+            Text(if (vm.dragMode) "Touchpad — Drag ON: moves select / drag"
+                   else "Touchpad — move only, never selects (Drag OFF)",
                 color = Color.White, modifier = Modifier.align(Alignment.Center))
             if (vm.touchpadLocked) Text("Locked — tap Lock to unlock",
                 color = Color.Yellow, modifier = Modifier.align(Alignment.TopCenter).padding(8.dp))
         }
-        // Scroll wheel strip (v1.3): a dedicated, easy wheel — drag
-        // up/down for vertical scroll, left/right for horizontal scroll,
-        // diagonal for both at once. Two-finger scroll on the pad above
-        // still works too.
-        ScrollWheelStrip(vm, settings)
+        // v1.4 tiny separate scroll strips: right edge = vertical only,
+        // bottom bar = horizontal only (mouse-wheel style).
+        VerticalScrollStrip(vm)
+        }
+        HorizontalScrollBar(vm)
         if (settings.showClickButtons) {
             Row(Modifier.fillMaxWidth()) {
                 Button(onClick = { vm.sendMouseButton(0, true); vm.sendMouseButton(0, false) },
@@ -260,29 +268,37 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
 }
 
 @Composable
-fun ScrollWheelStrip(vm: AirKeysViewModel, settings: SettingsStore) {
+fun VerticalScrollStrip(vm: AirKeysViewModel) {
     val wheel = remember { ScrollWheelAccumulator() }
     Box(
-        Modifier.fillMaxWidth().height(96.dp)
+        Modifier.width(36.dp).fillMaxHeight()
             .background(Color(0xFF2E2E4A))
             .border(1.dp, Color.Gray)
-            .pointerInput(settings) {
+            .pointerInput(Unit) {
                 detectDragGestures { _, dragAmount ->
-                    val (cx, cy) = wheel.accumulate(dragAmount.x, dragAmount.y)
-                    if (cx != 0 || cy != 0) vm.sendScrollWheel(cx, cy)
+                    val (_, cy) = wheel.accumulate(0f, dragAmount.y)
+                    if (cy != 0) vm.sendScrollWheel(0, cy)
                 }
             },
         contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("⟳  Scroll wheel", color = Color.White,
-                style = MaterialTheme.typography.titleMedium)
-            Text("Drag ↕ for vertical scroll  •  Drag ↔ for horizontal scroll",
-                color = Color.White, style = MaterialTheme.typography.bodySmall)
-            Text("Also works: two-finger drag on the pad above",
-                color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-        }
-    }
+    ) { Text("↕", color = Color.White) }
+}
+
+@Composable
+fun HorizontalScrollBar(vm: AirKeysViewModel) {
+    val wheel = remember { ScrollWheelAccumulator() }
+    Box(
+        Modifier.fillMaxWidth().height(36.dp)
+            .background(Color(0xFF2E2E4A))
+            .border(1.dp, Color.Gray)
+            .pointerInput(Unit) {
+                detectDragGestures { _, dragAmount ->
+                    val (cx, _) = wheel.accumulate(dragAmount.x, 0f)
+                    if (cx != 0) vm.sendScrollWheel(cx, 0)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) { Text("Scroll ↔  drag left / right", color = Color.White, style = MaterialTheme.typography.bodySmall) }
 }
 
 private fun dispatch(vm: AirKeysViewModel, settings: SettingsStore,
