@@ -6,22 +6,18 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.airkeys.*
 import kotlinx.coroutines.delay
@@ -49,27 +45,21 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 .horizontalScroll(rememberScrollState())) {
-                ModeButton("Keyboard", vm.mode == Mode.KEYBOARD) { vm.changeMode(Mode.KEYBOARD) }
-                ModeButton("Smart KB", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
+                ModeButton("Keyboard", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
                 ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.changeMode(Mode.TOUCHPAD) }
-                ModeButton("Split", vm.mode == Mode.SPLIT) { vm.changeMode(Mode.SPLIT) }
                 Button(onClick = { vm.testInjection() }, modifier = Modifier.padding(end = 4.dp)) {
                     Text("Test A + cursor")
                 }
-                if (vm.mode == Mode.TOUCHPAD || vm.mode == Mode.SPLIT) {
+                if (vm.mode == Mode.TOUCHPAD) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {
                         Text(if (vm.touchpadLocked) "🔒 Locked" else "🔓 Lock")
                     }
                 }
             }
             when (vm.mode) {
-                Mode.KEYBOARD -> KeyboardScreen(vm, settings)
+                // v1.3: Smart Keyboard is the only keyboard.
                 Mode.SMART_KEYBOARD -> SmartKeyboardScreen(vm)
                 Mode.TOUCHPAD -> TouchpadScreen(vm, settings, Modifier.weight(1f))
-                Mode.SPLIT -> Column(Modifier.weight(1f)) {
-                    TouchpadScreen(vm, settings, Modifier.weight(1f))
-                    KeyboardScreen(vm, settings, compact = true)
-                }
             }
         }
         if (showDevices) DeviceDialog(activity, vm, code, { code = it },
@@ -157,74 +147,6 @@ fun SettingsDialog(settings: SettingsStore, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
-}
-
-@Composable
-fun KeyboardScreen(vm: AirKeysViewModel, settings: SettingsStore, compact: Boolean = false) {
-    // Hidden field: the phone's own keyboard edits this buffer via the
-    // platform InputConnection, so swipe / voice / predictive all work.
-    // It always holds one sentinel space, rendered transparent so it
-    // looks empty — that space is what Backspace deletes (v1.2 fix:
-    // backspace on a truly empty field never fired onValueChange at all).
-    var text by remember { mutableStateOf(" ") }
-    val focusRequester = remember { FocusRequester() }
-    val resetSignal = vm.resetSignal
-    LaunchedEffect(resetSignal) { if (resetSignal > 0) text = " " }
-    Column(Modifier.fillMaxWidth().padding(8.dp)) {
-        Box(Modifier.fillMaxWidth().height(if (compact) 1.dp else 48.dp)) {
-            BasicTextField(value = text, onValueChange = {
-                text = it; vm.onHiddenTextChanged(it)
-            }, modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.None),
-                textStyle = androidx.compose.ui.text.TextStyle(color = Color.Transparent))
-        }
-        Button(onClick = { focusRequester.requestFocus() },
-            modifier = Modifier.fillMaxWidth()) { Text("Tap to open keyboard") }
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
-        // Extra key row: sticky modifiers + special keys.
-        ExtraKeyRow(vm)
-        if (!compact) {
-            Text("Type on your phone keyboard — Urdu, Pashto, Arabic, English, " +
-                "emoji, swipe and voice all go to the PC cursor.",
-                style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-fun ExtraKeyRow(vm: AirKeysViewModel) {
-    @Composable
-    fun ModBtn(label: String, mask: Int) {
-        Button(onClick = { vm.toggleModifier(mask) },
-            colors = if (vm.stickyModifiers and mask != 0) ButtonDefaults.buttonColors()
-            else ButtonDefaults.outlinedButtonColors(),
-            modifier = Modifier.padding(2.dp)) { Text(label) }
-    }
-    Column {
-        Row { ModBtn("Ctrl", Modifiers.CTRL); ModBtn("Alt", Modifiers.ALT)
-              ModBtn("Shift", Modifiers.SHIFT); ModBtn("Win", Modifiers.WIN) }
-        Row {
-            listOf("Esc" to KeyCode.ESC, "Tab" to KeyCode.TAB, "Del" to KeyCode.DELETE,
-                   "Enter" to KeyCode.ENTER).forEach { (label, code) ->
-                Button(onClick = { vm.sendSpecial(code) }, modifier = Modifier.padding(2.dp)) { Text(label) }
-            }
-            // Guaranteed backspace, independent of any keyboard's
-            // InputConnection behaviour — direct BACKSPACE frame.
-            Button(onClick = { vm.sendBackspace() }, modifier = Modifier.padding(2.dp)) { Text("⌫ Backspace") }
-        }
-        Row {
-            listOf("←" to KeyCode.LEFT, "↑" to KeyCode.UP, "↓" to KeyCode.DOWN,
-                   "→" to KeyCode.RIGHT, "Home" to KeyCode.HOME, "End" to KeyCode.END,
-                   "PgUp" to KeyCode.PAGE_UP, "PgDn" to KeyCode.PAGE_DOWN).forEach { (label, code) ->
-                Button(onClick = { vm.sendSpecial(code) }, modifier = Modifier.padding(2.dp)) { Text(label) }
-            }
-        }
-        Row {
-            (1..12).forEach { n ->
-                Button(onClick = { vm.sendFunctionKey(n) }, modifier = Modifier.padding(1.dp)) { Text("F$n") }
-            }
-        }
-    }
 }
 
 @Composable
@@ -321,6 +243,11 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
             if (vm.touchpadLocked) Text("Locked — tap Lock to unlock",
                 color = Color.Yellow, modifier = Modifier.align(Alignment.TopCenter).padding(8.dp))
         }
+        // Scroll wheel strip (v1.3): a dedicated, easy wheel — drag
+        // up/down for vertical scroll, left/right for horizontal scroll,
+        // diagonal for both at once. Two-finger scroll on the pad above
+        // still works too.
+        ScrollWheelStrip(vm, settings)
         if (settings.showClickButtons) {
             Row(Modifier.fillMaxWidth()) {
                 Button(onClick = { vm.sendMouseButton(0, true); vm.sendMouseButton(0, false) },
@@ -328,6 +255,32 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                 Button(onClick = { vm.sendMouseButton(1, true); vm.sendMouseButton(1, false) },
                     modifier = Modifier.weight(1f)) { Text("Right click") }
             }
+        }
+    }
+}
+
+@Composable
+fun ScrollWheelStrip(vm: AirKeysViewModel, settings: SettingsStore) {
+    val wheel = remember { ScrollWheelAccumulator() }
+    Box(
+        Modifier.fillMaxWidth().height(96.dp)
+            .background(Color(0xFF2E2E4A))
+            .border(1.dp, Color.Gray)
+            .pointerInput(settings) {
+                detectDragGestures { _, dragAmount ->
+                    val (cx, cy) = wheel.accumulate(dragAmount.x, dragAmount.y)
+                    if (cx != 0 || cy != 0) vm.sendScrollWheel(cx, cy)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("⟳  Scroll wheel", color = Color.White,
+                style = MaterialTheme.typography.titleMedium)
+            Text("Drag ↕ for vertical scroll  •  Drag ↔ for horizontal scroll",
+                color = Color.White, style = MaterialTheme.typography.bodySmall)
+            Text("Also works: two-finger drag on the pad above",
+                color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

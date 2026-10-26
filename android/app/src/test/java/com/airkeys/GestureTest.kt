@@ -45,6 +45,17 @@ class GestureTest {
         assertTrue(g.tapWithFingers(2).isEmpty())
     }
 
+    @Test fun scrollWheelBothAxes() {
+        val w = ScrollWheelAccumulator()
+        // 50 px down = 2 vertical clicks, 2 px kept for later.
+        assertEquals(0 to 2, w.accumulate(0f, 50f))
+        // 30 px left + the kept 2 px vertical remainder: -1 horizontal,
+        // vertical still below one click, so 0 vertical.
+        assertEquals(-1 to 0, w.accumulate(-30f, 10f))
+        // Diagonal: both axes at once.
+        assertEquals(1 to 1, w.accumulate(30f, 30f))
+    }
+
     @Test fun holdDragBeginsOnHold() {
         val g = TouchpadGestureProcessor()
         g.onPointer(1, PointerAction.DOWN, 10f, 10f, 1000)

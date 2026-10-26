@@ -17,6 +17,25 @@ sealed class MouseEvent {
 
 enum class PointerAction { DOWN, MOVE, UP, CANCEL }
 
+/**
+ * Scroll-wheel strip accumulator (v1.3): converts drag pixels into
+ * whole wheel clicks, keeping the remainder so slow drags still scroll
+ * smoothly. 24 px per click. Works for both axes at once: drag up/down
+ * = vertical clicks, drag left/right = horizontal clicks, diagonal =
+ * both. Pure and unit-testable.
+ */
+class ScrollWheelAccumulator(private val pxPerClick: Float = 24f) {
+    private var accX = 0f
+    private var accY = 0f
+    fun accumulate(dxPx: Float, dyPx: Float): Pair<Int, Int> {
+        accX += dxPx; accY += dyPx
+        val cx = (accX / pxPerClick).toInt()
+        val cy = (accY / pxPerClick).toInt()
+        accX -= cx * pxPerClick; accY -= cy * pxPerClick
+        return cx to cy
+    }
+}
+
 class TouchpadGestureProcessor(
     private val tapMaxMs: Long = 200L,
     private val tapMaxMovePx: Float = 12f,

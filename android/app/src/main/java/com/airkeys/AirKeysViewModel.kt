@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 
-enum class Mode { KEYBOARD, SMART_KEYBOARD, TOUCHPAD, SPLIT }
+// v1.3: the Android (Gboard) keyboard and Split modes were removed, as
+// requested. The Smart Keyboard is now the only keyboard.
+enum class Mode { SMART_KEYBOARD, TOUCHPAD }
 
 /**
  * UI state + input routing. All Bluetooth work goes through the foreground
@@ -20,7 +22,7 @@ class AirKeysViewModel : ViewModel() {
         fun setStatusListener(l: ((String) -> Unit)?) { statusListener = l }
     }
 
-    var mode by mutableStateOf(Mode.KEYBOARD); private set
+    var mode by mutableStateOf(Mode.SMART_KEYBOARD); private set
     var status by mutableStateOf("Disconnected"); private set
     var stickyModifiers by mutableStateOf(0); private set
     var touchpadLocked by mutableStateOf(false); private set
@@ -45,6 +47,13 @@ class AirKeysViewModel : ViewModel() {
 
     /** Direct text, used by the Smart Keyboard (no hidden-field delta). */
     fun sendTextDirect(text: String) = conn()?.sendText(text)
+    /**
+     * Scroll-wheel clicks, used by the touchpad scroll strip (v1.3).
+     * Unlike sendScroll(), this does NOT apply speed/natural here:
+     * Windows applies speed (120 per click) and natural-scroll once,
+     * so applying them here too would double-scale / double-invert.
+     */
+    fun sendScrollWheel(dxClicks: Int, dyClicks: Int) = conn()?.sendScroll(dxClicks, dyClicks)
     fun sendBackspace() = conn()?.sendBackspace(1)
     fun sendEnter() = sendSpecial(KeyCode.ENTER)
 

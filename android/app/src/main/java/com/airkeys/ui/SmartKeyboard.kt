@@ -1,102 +1,220 @@
 package com.airkeys.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airkeys.*
 import com.airkeys.R
 
 /**
- * In-app Smart Keyboard: every tap sends a frame immediately, with no
- * hidden text field, no focus loss, and no delta-guessing. English,
- * Urdu and symbols layouts, plus an emoji row. Gboard mode is still
- * available for swipe / voice / predictive typing — this is the
- * direct, deterministic alternative when Gboard misbehaves.
- */
-/**
- * v1.2 fix for "boxes with nothing in them": some devices have no Urdu
- * font, so Nastaliq glyphs rendered as tofu (□). We now bundle
- * Noto Nastaliq Urdu (verified: contains U+0627, U+06CC, 378 glyphs)
- * and use it for every Urdu key, so the keys render on any device.
+ * Smart Keyboard, rebuilt in v1.3 in the style of the screenshot the
+ * user sent (white board, black keys, red shift / backspace / enter /
+ * arrows, number row on top, space row, arrow row at the bottom) and
+ * merged with the existing Smart Keyboard layout:
+ *
+ * - EN / اردو / #@! layouts, with the bundled Noto Nastaliq Urdu font
+ *   for Urdu keys (v1.2 tofu fix, kept).
+ * - Sticky Ctrl / Alt / Win, Esc / Tab / Del, F1–F12, emoji row.
+ * - One-shot Shift for Latin letters, direct tap-to-send (no hidden
+ *   field, no Gboard). The Android (Gboard) keyboard mode is gone in
+ *   v1.3 — this is the only keyboard.
+ *
+ * Keys are flat outlined boxes, not Material buttons, so the board
+ * looks like a phone keyboard and every key is large enough to tap.
  */
 private val UrduFontFamily = FontFamily(Font(R.font.noto_nastaliq_urdu))
+private val KeyRed = Color(0xFFE53935)
+private val KeyOrange = Color(0xFFFF6D00)
+private val KeyGrey = Color(0xFFF5F5F5)
+private val KeyBorder = Color(0xFFE0E0E0)
+
+@Composable
+private fun RowScope.Key(
+    label: String,
+    onClick: () -> Unit,
+    weight: Float = 1f,
+    style: TextStyle = TextStyle(fontSize = 20.sp, color = Color.Black),
+    background: Color = Color.White,
+    contentColor: Color = Color.Black,
+) {
+    Box(
+        Modifier.weight(weight).padding(2.dp).height(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .border(1.dp, KeyBorder, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = style.copy(color = contentColor)) }
+}
+
+@Composable
+private fun RowScope.Chip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    style: TextStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+) {
+    Box(
+        Modifier.padding(2.dp).height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) KeyOrange else KeyGrey)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = style.copy(color = if (selected) Color.White else Color.Black)) }
+}
 
 @Composable
 fun SmartKeyboardScreen(vm: AirKeysViewModel) {
     var layout by remember { mutableStateOf(SmartLayout.ENGLISH) }
     var shift by remember { mutableStateOf(false) }
+    var emojiMode by remember { mutableStateOf(false) }
     val isUrdu = layout == SmartLayout.URDU
-    val keyStyle = if (isUrdu) TextStyle(fontFamily = UrduFontFamily, fontSize = 22.sp)
-                   else TextStyle(fontSize = 16.sp)
-    Column(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState())) {
-        // Modifier row (sticky, shared with the Gboard extra-key row).
-        Row {
-            listOf("Ctrl" to Modifiers.CTRL, "Alt" to Modifiers.ALT,
-                   "Shift" to Modifiers.SHIFT, "Win" to Modifiers.WIN).forEach { (label, mask) ->
-                Button(onClick = { vm.toggleModifier(mask) },
-                    colors = if (vm.stickyModifiers and mask != 0) ButtonDefaults.buttonColors()
-                    else ButtonDefaults.outlinedButtonColors(),
-                    modifier = Modifier.padding(2.dp)) { Text(label) }
-            }
+    val keyStyle = if (isUrdu) TextStyle(fontFamily = UrduFontFamily, fontSize = 24.sp)
+                   else TextStyle(fontSize = 20.sp)
+    val sticky = vm.stickyModifiers
+
+    fun sendKey(text: String) {
+        vm.sendTextDirect(KeyboardLayouts.applyShift(text, shift))
+        if (shift && layout == SmartLayout.ENGLISH) shift = false
+    }
+
+    Column(
+        Modifier.fillMaxWidth().background(Color.White)
+            .verticalScroll(rememberScrollState()).padding(4.dp)
+    ) {
+        // Top strip: layout + sticky modifiers + Esc/Tab/Del.
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically) {
+            Chip("EN", layout == SmartLayout.ENGLISH) { layout = SmartLayout.ENGLISH; emojiMode = false }
+            Chip("اردو", layout == SmartLayout.URDU, style = TextStyle(fontFamily = UrduFontFamily, fontSize = 18.sp)) { layout = SmartLayout.URDU; emojiMode = false }
+            Chip("#@!", layout == SmartLayout.SYMBOLS) { layout = SmartLayout.SYMBOLS; emojiMode = false }
+            Spacer(Modifier.width(8.dp))
+            Chip("Ctrl", sticky and Modifiers.CTRL != 0) { vm.toggleModifier(Modifiers.CTRL) }
+            Chip("Alt", sticky and Modifiers.ALT != 0) { vm.toggleModifier(Modifiers.ALT) }
+            Chip("Win", sticky and Modifiers.WIN != 0) { vm.toggleModifier(Modifiers.WIN) }
+            Spacer(Modifier.width(8.dp))
+            Chip("Esc", false) { vm.sendSpecial(KeyCode.ESC) }
+            Chip("Tab", false) { vm.sendSpecial(KeyCode.TAB) }
+            Chip("Del", false) { vm.sendSpecial(KeyCode.DELETE) }
         }
-        // Layout switch + shift.
-        Row {
-            Button(onClick = { layout = SmartLayout.ENGLISH }, modifier = Modifier.padding(2.dp)) { Text("EN") }
-            Button(onClick = { layout = SmartLayout.URDU }, modifier = Modifier.padding(2.dp)) {
-                Text("اردو", style = TextStyle(fontFamily = UrduFontFamily, fontSize = 18.sp))
+
+        if (emojiMode) {
+            // Emoji board replaces the letter rows; ABC goes back.
+            KeyboardLayouts.EMOJI_ROW.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { emoji -> Key(emoji, { vm.sendTextDirect(emoji) }, style = TextStyle(fontSize = 24.sp)) }
+                }
             }
-            Button(onClick = { layout = SmartLayout.SYMBOLS }, modifier = Modifier.padding(2.dp)) { Text("#@!") }
-            Button(onClick = { shift = !shift },
-                colors = if (shift) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                modifier = Modifier.padding(2.dp)) { Text("⇧") }
-        }
-        KeyboardLayouts.rowsFor(layout).forEach { row ->
             Row(Modifier.fillMaxWidth()) {
-                row.forEach { key ->
-                    Button(onClick = {
-                        vm.sendTextDirect(KeyboardLayouts.applyShift(key, shift))
-                        if (shift && layout == SmartLayout.ENGLISH) shift = false
-                    }, modifier = Modifier.weight(1f).padding(1.dp)
-                        .heightIn(min = if (isUrdu) 56.dp else 48.dp)) {
-                        Text(key, style = keyStyle)
+                Key("ABC", { emojiMode = false }, background = KeyGrey)
+            }
+        } else {
+            val rows = KeyboardLayouts.rowsFor(layout)
+            when (layout) {
+                SmartLayout.ENGLISH -> {
+                    // Screenshot rows: numbers, q-row, a-row, then
+                    // Shift + z-row + Backspace on one row.
+                    Row(Modifier.fillMaxWidth()) { rows[0].forEach { Key(it, { sendKey(it) }, style = keyStyle) } }
+                    Row(Modifier.fillMaxWidth()) { rows[1].forEach { Key(it, { sendKey(it) }, style = keyStyle) } }
+                    Row(Modifier.fillMaxWidth()) { rows[2].forEach { Key(it, { sendKey(it) }, style = keyStyle) } }
+                    Row(Modifier.fillMaxWidth()) {
+                        Key("⇧", { shift = !shift }, weight = 1.5f,
+                            background = if (shift) KeyOrange else Color.White,
+                            contentColor = if (shift) Color.White else KeyRed,
+                            style = TextStyle(fontSize = 22.sp, color = KeyRed))
+                        rows[3].forEach { Key(it, { sendKey(it) }, style = keyStyle) }
+                        Key("⌫", { vm.sendBackspace() }, weight = 1.5f,
+                            contentColor = KeyRed, style = TextStyle(fontSize = 22.sp, color = KeyRed))
+                    }
+                }
+                SmartLayout.URDU -> {
+                    // Urdu digits + 3 letter rows, then
+                    // Shift + last letter row + Backspace.
+                    rows.take(4).forEach { row ->
+                        Row(Modifier.fillMaxWidth()) { row.forEach { Key(it, { sendKey(it) }, style = keyStyle) } }
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        Key("⇧", { shift = !shift }, weight = 1.5f,
+                            background = if (shift) KeyOrange else Color.White,
+                            contentColor = if (shift) Color.White else KeyRed,
+                            style = TextStyle(fontSize = 22.sp, color = KeyRed))
+                        rows[4].forEach { Key(it, { sendKey(it) }, style = keyStyle) }
+                        Key("⌫", { vm.sendBackspace() }, weight = 1.5f,
+                            contentColor = KeyRed, style = TextStyle(fontSize = 22.sp, color = KeyRed))
+                    }
+                }
+                SmartLayout.SYMBOLS -> {
+                    rows.forEach { row ->
+                        Row(Modifier.fillMaxWidth()) { row.forEach { Key(it, { sendKey(it) }, style = keyStyle) } }
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        Key("⇧", { shift = !shift }, weight = 1f,
+                            background = if (shift) KeyOrange else Color.White,
+                            contentColor = if (shift) Color.White else KeyRed,
+                            style = TextStyle(fontSize = 22.sp, color = KeyRed))
+                        Key("⌫", { vm.sendBackspace() }, weight = 1f,
+                            contentColor = KeyRed, style = TextStyle(fontSize = 22.sp, color = KeyRed))
                     }
                 }
             }
         }
-        // Emoji row (horizontally scrollable).
+
+        // Space row, as in the screenshot: emoji, comma, wide space,
+        // period, red Enter.
+        Row(Modifier.fillMaxWidth()) {
+            Key("😊", { emojiMode = !emojiMode }, background = KeyGrey)
+            Key(",", { vm.sendTextDirect(",") })
+            Key("Space", { vm.sendTextDirect(" ") }, weight = 3f, background = KeyGrey)
+            Key(".", { vm.sendTextDirect(".") })
+            Key("↩", { vm.sendEnter() }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 24.sp, color = KeyRed))
+        }
+
+        // Arrow row, as in the screenshot: red arrows at the bottom.
+        Row(Modifier.fillMaxWidth()) {
+            Key("↑", { vm.sendSpecial(KeyCode.UP) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("↓", { vm.sendSpecial(KeyCode.DOWN) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("←", { vm.sendSpecial(KeyCode.LEFT) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("→", { vm.sendSpecial(KeyCode.RIGHT) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+        }
+
+        // F-keys, kept from the old extra-key row, small and scrollable.
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            KeyboardLayouts.EMOJI_ROW.forEach { emoji ->
-                Button(onClick = { vm.sendTextDirect(emoji) },
-                    modifier = Modifier.padding(1.dp)) { Text(emoji) }
+            (1..12).forEach { n ->
+                Box(
+                    Modifier.padding(2.dp).height(40.dp).width(52.dp)
+                        .clip(RoundedCornerShape(8.dp)).background(KeyGrey)
+                        .border(1.dp, KeyBorder, RoundedCornerShape(8.dp))
+                        .clickable { vm.sendFunctionKey(n) },
+                    contentAlignment = Alignment.Center,
+                ) { Text("F$n", style = TextStyle(fontSize = 14.sp)) }
             }
         }
-        // Space / backspace / enter / arrows.
-        Row(Modifier.fillMaxWidth()) {
-            Button(onClick = { vm.sendTextDirect(" ") },
-                modifier = Modifier.weight(2f).padding(2.dp)) { Text("Space") }
-            Button(onClick = { vm.sendBackspace() },
-                modifier = Modifier.weight(1f).padding(2.dp)) { Text("⌫") }
-            Button(onClick = { vm.sendEnter() },
-                modifier = Modifier.weight(1f).padding(2.dp)) { Text("Enter") }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            listOf("←" to KeyCode.LEFT, "↑" to KeyCode.UP, "↓" to KeyCode.DOWN,
-                   "→" to KeyCode.RIGHT).forEach { (label, code) ->
-                Button(onClick = { vm.sendSpecial(code) },
-                    modifier = Modifier.weight(1f).padding(2.dp)) { Text(label) }
-            }
-        }
-        Text("Smart Keyboard sends each tap directly — no hidden field. " +
-            "Use Gboard mode for swipe, voice and predictive text.",
-            style = MaterialTheme.typography.bodySmall)
+        Text("Smart Keyboard only — every tap sends directly to the PC.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(4.dp))
     }
 }
