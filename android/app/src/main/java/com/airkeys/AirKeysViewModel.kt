@@ -41,7 +41,7 @@ class AirKeysViewModel : ViewModel() {
 
     fun changeMode(m: Mode) { mode = m }
     fun setLocked(l: Boolean) { touchpadLocked = l }
-    fun setDragMode(on: Boolean) { dragMode = on }
+    fun changeDragMode(on: Boolean) { dragMode = on }
 
     fun toggleModifier(mask: Int) {
         stickyModifiers = stickyModifiers xor mask

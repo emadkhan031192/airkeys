@@ -54,7 +54,7 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {
                         Text(if (vm.touchpadLocked) "🔒 Locked" else "🔓 Lock")
                     }
-                    Button(onClick = { vm.setDragMode(!vm.dragMode) }) {
+                    Button(onClick = { vm.changeDragMode(!vm.dragMode) }) {
                         Text(if (vm.dragMode) "✋ Drag ON" else "Drag OFF")
                     }
                 }
