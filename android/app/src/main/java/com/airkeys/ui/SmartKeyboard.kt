@@ -101,6 +101,32 @@ fun SmartKeyboardScreen(vm: AirKeysViewModel) {
         Modifier.fillMaxWidth().background(Color.White)
             .verticalScroll(rememberScrollState()).padding(4.dp)
     ) {
+        // v1.5: arrow + F rows moved ABOVE the main keys, so the
+        // main keyboard (utility strip through Space) is the last
+        // thing on screen — flush to the bottom, as annotated.
+        // Arrow row, as in the screenshot: red arrows (moved up in v1.5).
+        Row(Modifier.fillMaxWidth()) {
+            Key("↑", { vm.sendSpecial(KeyCode.UP) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("↓", { vm.sendSpecial(KeyCode.DOWN) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("←", { vm.sendSpecial(KeyCode.LEFT) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+            Key("→", { vm.sendSpecial(KeyCode.RIGHT) }, contentColor = KeyRed,
+                style = TextStyle(fontSize = 22.sp, color = KeyRed))
+        }
+        // F-keys, kept from the old extra-key row, small and scrollable.
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            (1..12).forEach { n ->
+                Box(
+                    Modifier.padding(2.dp).height(40.dp).width(52.dp)
+                        .clip(RoundedCornerShape(8.dp)).background(KeyGrey)
+                        .border(1.dp, KeyBorder, RoundedCornerShape(8.dp))
+                        .clickable { vm.sendFunctionKey(n) },
+                    contentAlignment = Alignment.Center,
+                ) { Text("F$n", style = TextStyle(fontSize = 14.sp)) }
+            }
+        }
         // Top strip: layout + sticky modifiers + Esc/Tab/Del.
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically) {
@@ -189,32 +215,7 @@ fun SmartKeyboardScreen(vm: AirKeysViewModel) {
                 style = TextStyle(fontSize = 24.sp, color = KeyRed))
         }
 
-        // Arrow row, as in the screenshot: red arrows at the bottom.
-        Row(Modifier.fillMaxWidth()) {
-            Key("↑", { vm.sendSpecial(KeyCode.UP) }, contentColor = KeyRed,
-                style = TextStyle(fontSize = 22.sp, color = KeyRed))
-            Key("↓", { vm.sendSpecial(KeyCode.DOWN) }, contentColor = KeyRed,
-                style = TextStyle(fontSize = 22.sp, color = KeyRed))
-            Key("←", { vm.sendSpecial(KeyCode.LEFT) }, contentColor = KeyRed,
-                style = TextStyle(fontSize = 22.sp, color = KeyRed))
-            Key("→", { vm.sendSpecial(KeyCode.RIGHT) }, contentColor = KeyRed,
-                style = TextStyle(fontSize = 22.sp, color = KeyRed))
-        }
 
-        // F-keys, kept from the old extra-key row, small and scrollable.
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            (1..12).forEach { n ->
-                Box(
-                    Modifier.padding(2.dp).height(40.dp).width(52.dp)
-                        .clip(RoundedCornerShape(8.dp)).background(KeyGrey)
-                        .border(1.dp, KeyBorder, RoundedCornerShape(8.dp))
-                        .clickable { vm.sendFunctionKey(n) },
-                    contentAlignment = Alignment.Center,
-                ) { Text("F$n", style = TextStyle(fontSize = 14.sp)) }
-            }
-        }
-        Text("Smart Keyboard only — every tap sends directly to the PC.",
-            style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(4.dp))
     }
 }

@@ -19,6 +19,8 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.airkeys.*
 
 
@@ -28,28 +30,58 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
     var showSettings by remember { mutableStateOf(false) }
     var showDevices by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
+    // v1.5: poll live health every 2 s, so the UI never repeats a
+    // stale "Connected" when the transport is actually dead.
+    LaunchedEffect(Unit) {
+        while (true) { vm.refreshConnectionHealth(); delay(2000) }
+    }
     MaterialTheme {
         Column(Modifier.fillMaxSize()) {
-            // Top bar: status + mode switch (one tap) + settings + connect.
-            Row(Modifier.fillMaxWidth().padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Text("AirKeys", style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f))
-                Text(vm.status, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = { showDevices = true }) {
-                    Text(if (vm.status.startsWith("Connected")) "Disconnect" else "Connect")
+            // Top bar, two lines (v1.5 fix for "Air / Key / s" wrapping):
+            // line 1 = title + Connect + gear, line 2 = live status.
+            // The status line never trusts the status string alone: if
+            // it says Connected but no transport is live, it says so
+            // in red, with Test + Reconnect right there.
+            Column(Modifier.fillMaxWidth().padding(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("AirKeys", fontSize = 20.sp, maxLines = 1,
+                        modifier = Modifier.weight(1f))
+                    Button(onClick = { showDevices = true }) {
+                        Text(if (vm.connectionOk) "Disconnect" else "Connect")
+                    }
+                    IconButton(onClick = { showSettings = !showSettings }) { Text("⚙") }
                 }
-                IconButton(onClick = { showSettings = !showSettings }) { Text("⚙") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val healthText = when {
+                        vm.status.startsWith("Connected") && !vm.connectionOk ->
+                            "⚠ Shows Connected, but no live Bluetooth transport"
+                        vm.connectionOk ->
+                            "${vm.status} • ${vm.framesSent} frames sent"
+                        else -> vm.status
+                    }
+                    val healthColor = when {
+                        vm.status.startsWith("Connected") && !vm.connectionOk -> Color.Red
+                        vm.connectionOk -> Color(0xFF2E7D32)
+                        else -> Color.Gray
+                    }
+                    Text(healthText, style = MaterialTheme.typography.bodySmall,
+                        color = healthColor, modifier = Modifier.weight(1f))
+                    Button(onClick = { vm.testInjection() },
+                        modifier = Modifier.padding(horizontal = 4.dp)) { Text("Test") }
+                    if (!vm.connectionOk) {
+                        Button(onClick = { showDevices = true }) { Text("Reconnect") }
+                    }
+                }
+                vm.testResult?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 2.dp))
+                }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 .horizontalScroll(rememberScrollState())) {
                 ModeButton("Android KB", vm.mode == Mode.KEYBOARD) { vm.changeMode(Mode.KEYBOARD) }
                 ModeButton("Smart KB", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
                 ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.changeMode(Mode.TOUCHPAD) }
-                Button(onClick = { vm.testInjection() }, modifier = Modifier.padding(end = 4.dp)) {
-                    Text("Test A + cursor")
-                }
                 if (vm.mode == Mode.TOUCHPAD) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {
                         Text(if (vm.touchpadLocked) "🔒 Locked" else "🔓 Lock")

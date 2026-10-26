@@ -24,6 +24,14 @@ class AirKeysViewModel : ViewModel() {
 
     var mode by mutableStateOf(Mode.KEYBOARD); private set
     var status by mutableStateOf("Disconnected"); private set
+    /** v1.5 live health, checked against the service (not the status
+     *  string): connectionOk = a transport is actually live right now,
+     *  framesSent = frames actually enqueued to that transport. A stale
+     *  "Connected" string with connectionOk=false is a dead connection,
+     *  and the UI must say so instead of repeating "Connected". */
+    var connectionOk by mutableStateOf(false); private set
+    var framesSent by mutableStateOf(0L); private set
+    var testResult by mutableStateOf<String?>(null); private set
     var stickyModifiers by mutableStateOf(0); private set
     var touchpadLocked by mutableStateOf(false); private set
     /** v1.4: Drag mode, OFF by default. When OFF, touchpad moves never
@@ -62,13 +70,31 @@ class AirKeysViewModel : ViewModel() {
     fun sendBackspace() = conn()?.sendBackspace(1)
     fun sendEnter() = sendSpecial(KeyCode.ENTER)
 
+    fun refreshConnectionHealth() {
+        val inst = AirKeysService.instance
+        connectionOk = inst?.connection() != null
+        framesSent = inst?.framesSent() ?: 0L
+    }
+
     /** Diagnostics: types "A" and nudges the cursor, so the user can tell
-     *  transport failure apart from injection failure in one tap. */
+     *  transport failure apart from injection failure in one tap.
+     *  v1.5: reports the result in testResult, so a "Connected" UI that
+     *  sends nothing is exposed instead of trusted. */
     fun testInjection() {
-        val c = conn() ?: return
+        val c = conn()
+        if (c == null) {
+            testResult = "Test failed: no live connection — tap Reconnect, then Re-pair if asked."
+            refreshConnectionHealth(); return
+        }
+        val before = framesSent
         c.sendText("A")
         c.sendMouseMove(10, 0)
         c.flushMouseMovesNow(System.currentTimeMillis())
+        refreshConnectionHealth()
+        testResult = if (framesSent > before)
+            "Test sent (${framesSent - before} frames). If A did not appear on the PC, check the PC app is running and a text field is focused there."
+        else
+            "Test failed: nothing was sent — tap Reconnect, then Re-pair if asked."
     }
 
     /** Called on every hidden-field change, from Compose onValueChange.

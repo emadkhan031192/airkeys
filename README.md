@@ -8,7 +8,19 @@ AirKeys turns an Android phone into a wireless keyboard **and** mouse/touchpad
 for a Windows laptop. No internet, no cloud, no account, no relay server,
 no analytics.
 
-**v1.4 (current): both keyboards, bottom-anchored, Bluetooth only.**
+**v1.5 (current): main keys flush to the bottom, honest connection UI.**
+Smart Keyboard: arrow row + F-keys moved above the main keys, so the
+main keyboard (EN/اردو/#@! strip through Space) is the last thing on
+screen, flush to the bottom — no arrow/F/footer rows below it. Top
+bar no longer wraps "AirKeys" into "Air / Key / s": title on line 1,
+live status on line 2. Connection status no longer trusts the
+"Connected" string: the UI polls the live transport every 2 s and
+shows "⚠ Shows Connected, but no live Bluetooth transport" in red
+when the transport is dead, plus frames-sent count, a prominent
+Test button (reports sent vs failed), and a Reconnect button when
+not live. If Test sends but A does not appear on the PC, check the
+PC app is running and a text field is focused there.
+**v1.4: both keyboards, bottom-anchored, Bluetooth only.**
 Android KB is back alongside Smart KB (Smart KB kept, screenshot-style
 with EN / اردو / #@!, Nastaliq font, sticky Ctrl/Alt/Win, Esc/Tab/Del,
 F1–F12, emoji). Both keyboards sit at the bottom of the screen.
