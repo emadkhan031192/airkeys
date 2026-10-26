@@ -69,8 +69,8 @@ private fun RowScope.Key(
 private fun RowScope.Chip(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit,
     style: TextStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+    onClick: () -> Unit,
 ) {
     Box(
         Modifier.padding(2.dp).height(40.dp)
