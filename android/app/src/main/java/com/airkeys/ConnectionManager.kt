@@ -29,7 +29,7 @@ class ConnectionManager(
     private val onDisconnected: () -> Unit,
     private val onPong: (Long) -> Unit,
     private val onPaired: () -> Unit,
-) {
+) : InputTransport {
     companion object {
         val SERVICE_UUID: UUID = UUID.fromString("7a3e9b20-4f1c-4a2d-9c7e-1a2b3c4d5e6f")
         const val DIR_CLIENT: Byte = 0x00
@@ -37,7 +37,9 @@ class ConnectionManager(
         private const val TAG = "AirKeysConn"
     }
 
-    @Volatile var isConnected = false; private set
+    @Volatile override var isConnected = false
+    private var _framesSent = 0L
+    override val framesSent: Long get() = _framesSent
     @Volatile var sessionKey: ByteArray? = null; private set
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var running = false
@@ -51,11 +53,13 @@ class ConnectionManager(
     private fun enqueue(type: Byte, payload: ByteArray) {
         val key = sessionKey ?: return
         val s = seq.incrementAndGet()
-        try { sendQueue.put(Crypto.encryptFrame(key, DIR_CLIENT, type, s, payload)) }
-        catch (e: InterruptedException) { Thread.currentThread().interrupt() }
+        try {
+            sendQueue.put(Crypto.encryptFrame(key, DIR_CLIENT, type, s, payload))
+            _framesSent++
+        } catch (e: InterruptedException) { Thread.currentThread().interrupt() }
     }
 
-    fun sendText(text: String) {
+    override fun sendText(text: String) {
         // Split oversized text into ordered frames (max payload 8000).
         val bytes = text.toByteArray(Charsets.UTF_8)
         if (bytes.size <= 8000) { enqueue(FrameType.TEXT, bytes); return }
@@ -69,20 +73,20 @@ class ConnectionManager(
             enqueue(FrameType.TEXT, bytes.copyOfRange(off, safeEnd)); off = safeEnd
         }
     }
-    fun sendBackspace(count: Int) = enqueue(FrameType.BACKSPACE, FrameCodec.backspacePayload(count))
-    fun sendKey(code: Int, down: Boolean) = enqueue(FrameType.KEY, FrameCodec.keyPayload(code, down))
-    fun sendCombo(modifiers: Int, code: Int, down: Boolean) =
+    override fun sendBackspace(count: Int) = enqueue(FrameType.BACKSPACE, FrameCodec.backspacePayload(count))
+    override fun sendKey(code: Int, down: Boolean) = enqueue(FrameType.KEY, FrameCodec.keyPayload(code, down))
+    override fun sendCombo(modifiers: Int, code: Int, down: Boolean) =
         enqueue(FrameType.COMBO, FrameCodec.comboPayload(modifiers, code, down))
-    fun sendMouseButton(button: Int, down: Boolean) =
+    override fun sendMouseButton(button: Int, down: Boolean) =
         enqueue(FrameType.MOUSE_BUTTON, FrameCodec.mouseButtonPayload(button, down))
-    fun sendScroll(dx: Int, dy: Int) = enqueue(FrameType.MOUSE_SCROLL, FrameCodec.mouseScrollPayload(dx, dy))
-    fun sendMouseMove(dx: Int, dy: Int) { coalescer.add(dx, dy) }
+    override fun sendScroll(dx: Int, dy: Int) = enqueue(FrameType.MOUSE_SCROLL, FrameCodec.mouseScrollPayload(dx, dy))
+    override fun sendMouseMove(dx: Int, dy: Int) { coalescer.add(dx, dy) }
 
     fun flushMouseMoves(nowMs: Long) {
         val d = coalescer.flushIfDue(nowMs) ?: return
         enqueue(FrameType.MOUSE_MOVE, FrameCodec.mouseMovePayload(d.first, d.second))
     }
-    fun flushMouseMovesNow(nowMs: Long) {
+    override fun flushMouseMovesNow(nowMs: Long) {
         val d = coalescer.flushNow(nowMs) ?: return
         enqueue(FrameType.MOUSE_MOVE, FrameCodec.mouseMovePayload(d.first, d.second))
     }
@@ -209,7 +213,7 @@ class ConnectionManager(
         onDisconnected()
     }
 
-    fun disconnect() { running = false; isConnected = false; disconnectQuietly() }
+    override fun disconnect() { running = false; isConnected = false; disconnectQuietly() }
 
     private fun disconnectQuietly() {
         try { socket?.close() } catch (_: Exception) {}

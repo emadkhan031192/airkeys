@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 
-enum class Mode { KEYBOARD, TOUCHPAD, SPLIT }
+enum class Mode { KEYBOARD, SMART_KEYBOARD, TOUCHPAD, SPLIT }
 
 /**
  * UI state + input routing. All Bluetooth work goes through the foreground
@@ -40,7 +40,21 @@ class AirKeysViewModel : ViewModel() {
     }
     fun clearModifiers() { stickyModifiers = 0 }
 
-    private fun conn(): ConnectionManager? = AirKeysService.instance?.connection()
+    private fun conn(): InputTransport? = AirKeysService.instance?.connection()
+
+    /** Direct text, used by the Smart Keyboard (no hidden-field delta). */
+    fun sendTextDirect(text: String) = conn()?.sendText(text)
+    fun sendBackspace() = conn()?.sendBackspace(1)
+    fun sendEnter() = sendSpecial(KeyCode.ENTER)
+
+    /** Diagnostics: types "A" and nudges the cursor, so the user can tell
+     *  transport failure apart from injection failure in one tap. */
+    fun testInjection() {
+        val c = conn() ?: return
+        c.sendText("A")
+        c.sendMouseMove(10, 0)
+        c.flushMouseMovesNow(System.currentTimeMillis())
+    }
 
     /** Called on every hidden-field change, from Compose onValueChange. */
     fun onHiddenTextChanged(newText: String) {

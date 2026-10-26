@@ -27,9 +27,11 @@ public sealed class TrayAppContext : ApplicationContext
     private readonly AppSettings _settings;
     private readonly InputInjector _injector;
     private readonly RfcommServer _server;
+    private readonly TcpServer _tcpServer;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _deviceItem;
+    private readonly ToolStripMenuItem _lanItem;
     private IntPtr _hotkeyWindowHandle;
 
     // Win32 hotkey: Ctrl+Alt+Pause.
@@ -47,6 +49,9 @@ public sealed class TrayAppContext : ApplicationContext
         _server = new RfcommServer(injector, settings,
             status => UpdateStatus(status),
             device => UpdateDevice(device));
+        _tcpServer = new TcpServer(injector, settings,
+            status => UpdateStatus(status),
+            device => UpdateDevice(device));
 
         _tray = new NotifyIcon
         {
@@ -56,12 +61,14 @@ public sealed class TrayAppContext : ApplicationContext
         };
         _statusItem = new ToolStripMenuItem("Status: Waiting for phone…") { Enabled = false };
         _deviceItem = new ToolStripMenuItem("Paired device: none") { Enabled = false };
+        _lanItem = new ToolStripMenuItem("LAN: starting…") { Enabled = false };
         if (!string.IsNullOrEmpty(settings.PairedDeviceName))
             _deviceItem.Text = "Paired device: " + settings.PairedDeviceName;
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_statusItem);
         menu.Items.Add(_deviceItem);
+        menu.Items.Add(_lanItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Settings…", null, (_, _) => new SettingsForm(_settings).ShowDialog());
         menu.Items.Add("Re-pair…", null, (_, _) => ShowPairing());
@@ -86,7 +93,14 @@ public sealed class TrayAppContext : ApplicationContext
         host.Hide();
     }
 
-    public Task StartServerAsync() => _server.StartAsync();
+    public async Task StartServerAsync()
+    {
+        // LAN first: it is the recommended transport in v1.1 and works
+        // even if Bluetooth is unavailable on this machine.
+        try { await _tcpServer.StartAsync(); } catch { /* Bluetooth still available */ }
+        _lanItem.Text = "LAN: " + TcpServer.LocalAddresses() + " :" + TcpServer.TcpPort;
+        try { await _server.StartAsync(); } catch { /* LAN still available */ }
+    }
 
     private void UpdateStatus(string status)
     {
@@ -109,11 +123,13 @@ public sealed class TrayAppContext : ApplicationContext
 
     private void ShowPairing()
     {
+        // One code for both transports, valid 120 s on both servers.
         var code = _server.GeneratePairingCode();
+        _tcpServer.SetPairingCode(code);
         var form = new PairingForm(code);
         form.Show();
         // If the user closes the window, the code stays valid for 120 s
-        // (the server enforces expiry); closing does not cancel pairing.
+        // (the servers enforce expiry); closing does not cancel pairing.
     }
 
     /// <summary>Panic: release all input, then disconnect. Triggered by
@@ -122,6 +138,7 @@ public sealed class TrayAppContext : ApplicationContext
     {
         _injector.ReleaseAll();
         _server.Disconnect();
+        _tcpServer.Disconnect();
         if (showToast)
             _tray.ShowBalloonTip(2000, "AirKeys",
                 "Panic: all keys and buttons released, disconnected.", ToolTipIcon.Warning);
@@ -132,6 +149,7 @@ public sealed class TrayAppContext : ApplicationContext
         if (disposing)
         {
             _server.Dispose();
+            _tcpServer.Dispose();
             _tray.Visible = false;
             _tray.Dispose();
         }

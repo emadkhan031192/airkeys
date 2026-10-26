@@ -3,6 +3,9 @@ package com.airkeys.ui
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,16 +44,20 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
                 Text(vm.status, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = { showDevices = true }) {
-                    Text(if (vm.status == "Connected") "Disconnect" else "Connect")
+                    Text(if (vm.status.startsWith("Connected")) "Disconnect" else "Connect")
                 }
                 IconButton(onClick = { showSettings = !showSettings }) { Text("⚙") }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                .horizontalScroll(rememberScrollState())) {
                 ModeButton("Keyboard", vm.mode == Mode.KEYBOARD) { vm.changeMode(Mode.KEYBOARD) }
+                ModeButton("Smart KB", vm.mode == Mode.SMART_KEYBOARD) { vm.changeMode(Mode.SMART_KEYBOARD) }
                 ModeButton("Touchpad", vm.mode == Mode.TOUCHPAD) { vm.changeMode(Mode.TOUCHPAD) }
                 ModeButton("Split", vm.mode == Mode.SPLIT) { vm.changeMode(Mode.SPLIT) }
-                Spacer(Modifier.weight(1f))
-                if (vm.mode != Mode.KEYBOARD) {
+                Button(onClick = { vm.testInjection() }, modifier = Modifier.padding(end = 4.dp)) {
+                    Text("Test A + cursor")
+                }
+                if (vm.mode == Mode.TOUCHPAD || vm.mode == Mode.SPLIT) {
                     Button(onClick = { vm.setLocked(!vm.touchpadLocked) }) {
                         Text(if (vm.touchpadLocked) "🔒 Locked" else "🔓 Lock")
                     }
@@ -58,6 +65,7 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
             }
             when (vm.mode) {
                 Mode.KEYBOARD -> KeyboardScreen(vm, settings)
+                Mode.SMART_KEYBOARD -> SmartKeyboardScreen(vm)
                 Mode.TOUCHPAD -> TouchpadScreen(vm, settings, Modifier.weight(1f))
                 Mode.SPLIT -> Column(Modifier.weight(1f)) {
                     TouchpadScreen(vm, settings, Modifier.weight(1f))
@@ -68,6 +76,8 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
         if (showDevices) DeviceDialog(activity, vm, code, { code = it },
             onDismiss = { showDevices = false },
             onConnect = { addr, c -> activity.connect(addr, c.ifBlank { null }); showDevices = false },
+            onConnectLan = { host, c -> activity.connectLan(host.ifBlank { null }, c.ifBlank { null }); showDevices = false },
+            onConnectAuto = { c -> activity.connectAuto(c.ifBlank { null }); showDevices = false },
             onDisconnect = { activity.disconnect(); showDevices = false })
         if (showSettings) SettingsDialog(settings) { showSettings = false }
     }
@@ -83,12 +93,26 @@ private fun RowScope.ModeButton(label: String, selected: Boolean, onClick: () ->
 @Composable
 fun DeviceDialog(activity: MainActivity, vm: AirKeysViewModel, code: String,
                  onCode: (String) -> Unit, onDismiss: () -> Unit,
-                 onConnect: (String, String) -> Unit, onDisconnect: () -> Unit) {
+                 onConnect: (String, String) -> Unit,
+                 onConnectLan: (String, String) -> Unit,
+                 onConnectAuto: (String) -> Unit,
+                 onDisconnect: () -> Unit) {
     var devices by remember { mutableStateOf(activity.bondedDevices()) }
+    var lanHost by remember { mutableStateOf("") }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Connect to laptop") },
         text = {
-            Column {
-                Text("Pick a bonded laptop. If it is not listed, bond it first in Android Bluetooth settings, then reopen this dialog.")
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Recommended: Auto — tries LAN first (your existing hotspot / Wi-Fi / USB), then Bluetooth.")
+                Button(onClick = { onConnectAuto(code) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Text("Auto connect (LAN first)") }
+                Text("LAN (Wi-Fi / hotspot / USB): leave the IP blank to discover the PC, or type its IP from the PC tray.")
+                OutlinedTextField(value = lanHost, onValueChange = { lanHost = it },
+                    label = { Text("PC IP (optional, e.g. 192.168.43.87)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                Button(onClick = { onConnectLan(lanHost, code) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text("Connect via LAN") }
+                Spacer(Modifier.height(8.dp))
+                Text("Bluetooth fallback: pick a bonded laptop. If it is not listed, bond it first in Android Bluetooth settings, then reopen this dialog.")
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(Modifier.heightIn(max = 260.dp)) {
                     items(devices) { (name, addr) ->

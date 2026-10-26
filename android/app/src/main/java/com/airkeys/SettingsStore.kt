@@ -83,5 +83,14 @@ class PairingKeyStore(context: Context) {
         return try { cipher.doFinal(ct) } catch (e: Exception) { null }
     }
 
+    /** Fallback for when a hotspot/USB IP changed: return any stored LAN key.
+     *  Only correct when one LAN PC is paired; with several, the server
+     *  rejects a wrong key and the phone shows "Pairing failed" instead
+     *  of silently dropping input, so the user re-enters the code. */
+    fun loadFirstLan(): ByteArray? {
+        val key = prefs.all.keys.firstOrNull { it.startsWith("key_lan:") } ?: return null
+        return load(key.removePrefix("key_"))
+    }
+
     fun clear(address: String) { prefs.edit().remove("key_$address").apply() }
 }

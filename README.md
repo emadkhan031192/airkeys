@@ -5,9 +5,18 @@
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 AirKeys turns an Android phone into a wireless keyboard **and** mouse/touchpad
-for a Windows laptop over **Bluetooth Classic (RFCOMM/SPP)**. No Wi-Fi, no
-internet, no cloud, no account, no relay server, no analytics. Turn Wi-Fi
-and mobile data off and it still works.
+for a Windows laptop. No internet, no cloud, no account, no relay server,
+no analytics.
+
+**v1.1 transports (multi-transport, auto-fallback):** the app tries LAN
+first, then Bluetooth. LAN means any local network you already have: your
+phone hotspot that you already share for internet, home/office Wi-Fi, or
+USB tethering. AirKeys **reuses** that network — it does not create a new
+hotspot, does not use Android's LocalOnlyHotspot (which would break
+internet sharing), and its traffic never leaves the local network or uses
+mobile data. Bluetooth Classic (RFCOMM/SPP) remains as a fallback.
+"Connected" is only shown after pairing actually succeeds — a socket that
+opened but never paired now shows "Pairing failed", never "Connected".
 
 Open the Android app, tap **Connect**, and:
 
@@ -36,19 +45,31 @@ Open the Android app, tap **Connect**, and:
 - Sticky Ctrl/Alt/Shift/Win, F1–F12, arrows, Home/End, PageUp/PageDown.
 - Palm rejection and a touchpad lock on the phone.
 
-## Setup in 5 steps
+## Setup in 5 steps (LAN, recommended)
 
-1. **Windows:** install `AirKeys.exe` from the latest GitHub Release (or build
-   it, see below). It lives in the system tray. On first run it shows a
-   6-digit pairing code.
-2. **Android:** install the APK from the same Release (or build it in
-   Android Studio). Grant Bluetooth + Notifications permissions when asked.
-3. **Bond:** on the phone, pair with the laptop in Android Bluetooth
-   settings first (standard Bluetooth bonding), if not already paired.
-4. **Connect:** in the AirKeys app, pick the laptop from the device list,
-   tap **Connect**, and type the 6-digit code from the PC screen when asked.
-5. **Use it:** tap the keyboard/touchpad switch. That's it — the code is
-   never asked again on this phone + laptop pair.
+1. **Windows:** install `AirKeys.exe` from the latest GitHub Release. It
+   lives in the system tray. Allow it on private networks when Windows
+   Firewall asks (once) — that is the LAN listener, not internet access.
+   Tray > Re-pair shows a 6-digit pairing code and the PC's LAN IPs.
+2. **Android:** install the APK from the same Release. Grant Bluetooth +
+   Notifications when asked (Bluetooth is only for the fallback).
+3. **Same network:** put both devices on a network you already use —
+   your phone hotspot (already shared for internet is fine), home Wi-Fi,
+   or USB tethering. No new hotspot is needed.
+4. **Connect:** in the AirKeys app, tap **Connect > Auto connect (LAN
+   first)**, and type the 6-digit code from the PC screen when asked.
+   The phone discovers the PC by UDP broadcast, or by scanning the
+   hotspot subnet. The code is never asked again for that pair, unless
+   the hotspot IP changes (then re-enter it once).
+5. **Use it:** tap the keyboard / Smart KB / touchpad switch. Smart KB
+   is the built-in English/Urdu/symbols keyboard that sends each tap
+   directly; Keyboard mode uses your phone keyboard (Gboard/SwiftKey)
+   for swipe, voice and predictive text.
+
+Bluetooth fallback: bond in Android Bluetooth settings first, then pick
+the laptop from the device list in the app. If the PC tray says
+"waiting for pairing" while the phone says anything else, pairing has
+not succeeded — re-pair within 120 seconds.
 
 ## Gesture cheat sheet
 

@@ -1,6 +1,31 @@
-# AirKeys Protocol v1
+# AirKeys Protocol v1 (v1.1 transport update)
 
-100% offline. One Bluetooth Classic RFCOMM (SPP) connection, custom UUID
+100% offline. v1.0 used one Bluetooth Classic RFCOMM (SPP) connection.
+v1.1 keeps those exact frames and adds a TCP LAN transport; the phone
+tries LAN first, then Bluetooth, and both carry the same frames with the
+same AES-GCM keys and seq rules. LAN is any local network already in use
+(phone hotspot shared for internet, home Wi-Fi, USB tethering) — it is
+not a new hotspot, and traffic never leaves the LAN.
+
+LAN transport details:
+- TCP port 47820, one client at a time, `TcpNoDelay` on, same
+  [length][type][seq][payload][tag] frames as §1.
+- UDP discovery port 47821: the PC broadcasts
+  `AirKeys|47820|<PC name>` every second. The phone listens, then
+  connects by TCP to the sender. Fallback: parallel TCP scan of the
+  common /24s (192.168.43.x phone hotspot, 192.168.137.x Windows
+  hotspot, 192.168.42.x USB tethering, 192.168.0/1.x home routers).
+- Pairing is identical (§4): same 6-digit code, same PBKDF2 derivation,
+  same PAIR steps. LAN keys are stored separately from Bluetooth keys
+  (Windows: `lan:<phone name>`, Android: `lan:<PC IP>`, plus a
+  first-LAN-key fallback when a hotspot IP changes).
+- Honest status rule (v1.1): a transport is "Connected" only after a
+  PAIR reply decrypts successfully. Socket-open without PAIR is
+  "Pairing…", then "Pairing failed — re-enter code". Never "Connected"
+  while input is being dropped.
+
+Bluetooth transport (fallback):
+One Bluetooth Classic RFCOMM (SPP) connection, custom UUID
 `00001101-0000-1000-8000-00805F9B34FB` is NOT used; AirKeys uses its own UUID so
 it never collides with generic SPP devices:
 
