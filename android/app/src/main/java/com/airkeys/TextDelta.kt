@@ -6,20 +6,20 @@ package com.airkeys
  * hidden text buffer; we only ever send what changed, never the whole buffer.
  * This keeps predictive/swipe text correct on the PC and avoids echoing.
  */
-data class TextDelta(val deleted: Int, val inserted: String)
-
-object TextDelta {
-    fun compute(old: String, new: String): TextDelta {
-        if (old == new) return TextDelta(0, "")
-        var prefix = 0
-        val minLen = minOf(old.length, new.length)
-        while (prefix < minLen && old[prefix] == new[prefix]) prefix++
-        var suffix = 0
-        while (suffix < minLen - prefix &&
-            old[old.length - 1 - suffix] == new[new.length - 1 - suffix]) suffix++
-        val deleted = old.length - prefix - suffix
-        val inserted = new.substring(prefix, new.length - suffix)
-        return TextDelta(deleted, inserted)
+data class TextDelta(val deleted: Int, val inserted: String) {
+    companion object {
+        fun compute(old: String, new: String): TextDelta {
+            if (old == new) return TextDelta(0, "")
+            var prefix = 0
+            val minLen = minOf(old.length, new.length)
+            while (prefix < minLen && old[prefix] == new[prefix]) prefix++
+            var suffix = 0
+            while (suffix < minLen - prefix &&
+                old[old.length - 1 - suffix] == new[new.length - 1 - suffix]) suffix++
+            val deleted = old.length - prefix - suffix
+            val inserted = new.substring(prefix, new.length - suffix)
+            return TextDelta(deleted, inserted)
+        }
     }
 }
 
