@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,8 +75,6 @@ fun AirKeysApp(vm: AirKeysViewModel, activity: MainActivity) {
         if (showDevices) DeviceDialog(activity, vm, code, { code = it },
             onDismiss = { showDevices = false },
             onConnect = { addr, c -> activity.connect(addr, c.ifBlank { null }); showDevices = false },
-            onConnectLan = { host, c -> activity.connectLan(host.ifBlank { null }, c.ifBlank { null }); showDevices = false },
-            onConnectAuto = { c -> activity.connectAuto(c.ifBlank { null }); showDevices = false },
             onDisconnect = { activity.disconnect(); showDevices = false })
         if (showSettings) SettingsDialog(settings) { showSettings = false }
     }
@@ -94,25 +91,15 @@ private fun RowScope.ModeButton(label: String, selected: Boolean, onClick: () ->
 fun DeviceDialog(activity: MainActivity, vm: AirKeysViewModel, code: String,
                  onCode: (String) -> Unit, onDismiss: () -> Unit,
                  onConnect: (String, String) -> Unit,
-                 onConnectLan: (String, String) -> Unit,
-                 onConnectAuto: (String) -> Unit,
                  onDisconnect: () -> Unit) {
+    // v1.2: Bluetooth only, as requested. LAN/Auto options were removed
+    // from this dialog (and from the Windows tray) — the LAN code stays
+    // in the repo but is not offered as a connection choice.
     var devices by remember { mutableStateOf(activity.bondedDevices()) }
-    var lanHost by remember { mutableStateOf("") }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Connect to laptop") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Recommended: Auto — tries LAN first (your existing hotspot / Wi-Fi / USB), then Bluetooth.")
-                Button(onClick = { onConnectAuto(code) },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Text("Auto connect (LAN first)") }
-                Text("LAN (Wi-Fi / hotspot / USB): leave the IP blank to discover the PC, or type its IP from the PC tray.")
-                OutlinedTextField(value = lanHost, onValueChange = { lanHost = it },
-                    label = { Text("PC IP (optional, e.g. 192.168.43.87)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { onConnectLan(lanHost, code) },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text("Connect via LAN") }
-                Spacer(Modifier.height(8.dp))
-                Text("Bluetooth fallback: pick a bonded laptop. If it is not listed, bond it first in Android Bluetooth settings, then reopen this dialog.")
+            Column {
+                Text("Bluetooth only: pick a bonded laptop. If it is not listed, bond it first in Android Bluetooth settings, then reopen this dialog.")
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(Modifier.heightIn(max = 260.dp)) {
                     items(devices) { (name, addr) ->
@@ -142,6 +129,7 @@ fun SettingsDialog(settings: SettingsStore, onDismiss: () -> Unit) {
     var haptics by remember { mutableStateOf(settings.haptics) }
     var keepOn by remember { mutableStateOf(settings.keepScreenOn) }
     var buttons by remember { mutableStateOf(settings.showClickButtons) }
+    var tapClick by remember { mutableStateOf(settings.tapToClick) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Settings") },
         text = {
             Column {
@@ -163,6 +151,9 @@ fun SettingsDialog(settings: SettingsStore, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(buttons, { buttons = it; settings.showClickButtons = it }); Text("Show click buttons")
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(tapClick, { tapClick = it; settings.tapToClick = it }); Text("Tap to click (off = buttons only)")
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
@@ -172,17 +163,20 @@ fun SettingsDialog(settings: SettingsStore, onDismiss: () -> Unit) {
 fun KeyboardScreen(vm: AirKeysViewModel, settings: SettingsStore, compact: Boolean = false) {
     // Hidden field: the phone's own keyboard edits this buffer via the
     // platform InputConnection, so swipe / voice / predictive all work.
-    // We send only the delta and then clear it (see ViewModel.resetSignal).
-    var text by remember { mutableStateOf("") }
+    // It always holds one sentinel space, rendered transparent so it
+    // looks empty — that space is what Backspace deletes (v1.2 fix:
+    // backspace on a truly empty field never fired onValueChange at all).
+    var text by remember { mutableStateOf(" ") }
     val focusRequester = remember { FocusRequester() }
     val resetSignal = vm.resetSignal
-    LaunchedEffect(resetSignal) { if (resetSignal > 0) text = "" }
+    LaunchedEffect(resetSignal) { if (resetSignal > 0) text = " " }
     Column(Modifier.fillMaxWidth().padding(8.dp)) {
         Box(Modifier.fillMaxWidth().height(if (compact) 1.dp else 48.dp)) {
             BasicTextField(value = text, onValueChange = {
                 text = it; vm.onHiddenTextChanged(it)
             }, modifier = Modifier.fillMaxSize().focusRequester(focusRequester),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.None))
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.None),
+                textStyle = androidx.compose.ui.text.TextStyle(color = Color.Transparent))
         }
         Button(onClick = { focusRequester.requestFocus() },
             modifier = Modifier.fillMaxWidth()) { Text("Tap to open keyboard") }
@@ -214,6 +208,9 @@ fun ExtraKeyRow(vm: AirKeysViewModel) {
                    "Enter" to KeyCode.ENTER).forEach { (label, code) ->
                 Button(onClick = { vm.sendSpecial(code) }, modifier = Modifier.padding(2.dp)) { Text(label) }
             }
+            // Guaranteed backspace, independent of any keyboard's
+            // InputConnection behaviour — direct BACKSPACE frame.
+            Button(onClick = { vm.sendBackspace() }, modifier = Modifier.padding(2.dp)) { Text("⌫ Backspace") }
         }
         Row {
             listOf("←" to KeyCode.LEFT, "↑" to KeyCode.UP, "↓" to KeyCode.DOWN,
@@ -234,7 +231,11 @@ fun ExtraKeyRow(vm: AirKeysViewModel) {
 fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modifier = Modifier) {
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val processor = remember { TouchpadGestureProcessor(sensitivity = settings.sensitivity) }
+    // Recreated when tap-to-click changes, so the new setting takes effect.
+    val processor = remember(settings.tapToClick) {
+        TouchpadGestureProcessor(sensitivity = settings.sensitivity,
+            tapToClickEnabled = settings.tapToClick)
+    }
     var holdJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Column(modifier) {
         Box(Modifier.weight(1f).fillMaxWidth()
@@ -243,8 +244,13 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
             .pointerInput(vm.touchpadLocked, settings) {
                 awaitEachGesture {
                     // Track multi-finger taps: collect down/up quickly.
+                    // v1.2 fix: a two-finger SCROLL lifting a finger must
+                    // never become a right click. Only a quick multi-tap
+                    // with no scroll movement counts as a multi-finger tap.
                     val downIds = mutableSetOf<Long>()
                     var lastEventTime = 0L
+                    var multiDownAtMs = 0L
+                    var multiMoved = false
                     while (true) {
                         val event = awaitPointerEvent()
                         val now = System.currentTimeMillis()
@@ -255,6 +261,7 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                             when {
                                 change.changedToDown() -> {
                                     downIds += change.id.value
+                                    if (downIds.size == 2) { multiDownAtMs = now; multiMoved = false }
                                     val ev = processor.onPointer(id, PointerAction.DOWN,
                                         change.position.x, change.position.y, now)
                                     dispatch(vm, settings, view, ev)
@@ -269,11 +276,12 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                                 change.changedToUp() -> {
                                     holdJob?.cancel()
                                     val wasMulti = downIds.size >= 2
+                                    val isQuickMultiTap = wasMulti && !multiMoved &&
+                                        (now - multiDownAtMs) <= 250 && settings.tapToClick
                                     val ev = processor.onPointer(id, PointerAction.UP,
                                         change.position.x, change.position.y, now)
-                                    if (wasMulti && downIds.size in 2..3) {
-                                        // Multi-finger tap: replace single-click
-                                        // output with the correct button.
+                                    if (isQuickMultiTap && downIds.size in 2..3) {
+                                        // Genuine multi-finger tap only.
                                         dispatch(vm, settings, view,
                                             processor.tapWithFingers(downIds.size))
                                     } else {
@@ -283,6 +291,7 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                                     if (downIds.isEmpty()) vm.flushMovesNow()
                                 }
                                 change.positionChanged() -> {
+                                    if (downIds.size >= 2) multiMoved = true
                                     val ev = processor.onPointer(id, PointerAction.MOVE,
                                         change.position.x, change.position.y, now)
                                     // Moves go through the coalescer; other
@@ -306,7 +315,8 @@ fun TouchpadScreen(vm: AirKeysViewModel, settings: SettingsStore, modifier: Modi
                     }
                 }
             }) {
-            Text("Touchpad — move, tap, two-finger scroll",
+            Text(if (settings.tapToClick) "Touchpad — move, tap, two-finger scroll"
+                   else "Touchpad — move only, use Left / Right buttons to click",
                 color = Color.White, modifier = Modifier.align(Alignment.Center))
             if (vm.touchpadLocked) Text("Locked — tap Lock to unlock",
                 color = Color.Yellow, modifier = Modifier.align(Alignment.TopCenter).padding(8.dp))

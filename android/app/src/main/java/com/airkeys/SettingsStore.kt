@@ -34,6 +34,15 @@ class SettingsStore(context: Context) {
     var showClickButtons: Boolean
         get() = prefs.getBoolean("click_buttons", true)
         set(v) { prefs.edit().putBoolean("click_buttons", v).apply() }
+    /** v1.2: OFF by default. v1.0/v1.1 tap-to-click fired a left click
+     *  every time a moving finger lifted, and a right click when a
+     *  two-finger scroll lifted — that is what made the touchpad feel
+     *  hard and "auto-clicky". With this off, clicks come only from the
+     *  dedicated Left/Right buttons (or hold-drag). Turn it on in
+     *  Settings only if you want tap-to-click back. */
+    var tapToClick: Boolean
+        get() = prefs.getBoolean("tap_to_click", false)
+        set(v) { prefs.edit().putBoolean("tap_to_click", v).apply() }
     var touchpadLock: Boolean
         get() = prefs.getBoolean("touchpad_lock", false)
         set(v) { prefs.edit().putBoolean("touchpad_lock", v).apply() }

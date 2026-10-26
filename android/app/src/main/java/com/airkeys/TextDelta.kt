@@ -8,6 +8,29 @@ package com.airkeys
  */
 data class TextDelta(val deleted: Int, val inserted: String) {
     companion object {
+        /**
+         * Sentinel-aware delta for the hidden Gboard field (v1.2 fix).
+         *
+         * v1.0/v1.1 bug: after every keystroke the field was cleared to "".
+         * Pressing Backspace on an empty field changes nothing, so Gboard
+         * never calls onValueChange and the PC never got a BACKSPACE frame
+         * — delete looked completely broken.
+         *
+         * Fix: the field always holds one sentinel space (rendered
+         * transparent, so it looks empty). Backspace deletes the sentinel,
+         * which IS a change, so onValueChange fires with "" and we send
+         * exactly one BACKSPACE to the PC, then restore the sentinel.
+         * Typing keeps the sentinel as a prefix, so inserted text is
+         * newText minus the sentinel. If the IME replaces the whole field
+         * (predictive/swipe), the sentinel loss is NOT a backspace.
+         */
+        fun computeWithSentinel(old: String, new: String, sentinel: String = " "): TextDelta {
+            if (old == sentinel && new == sentinel) return TextDelta(0, "")
+            if (new.isEmpty() && old == sentinel) return TextDelta(1, "")
+            if (new.startsWith(sentinel)) return TextDelta(0, new.substring(sentinel.length))
+            return TextDelta(0, new) // IME replaced the field, not a backspace
+        }
+
         fun compute(old: String, new: String): TextDelta {
             if (old == new) return TextDelta(0, "")
             var prefix = 0

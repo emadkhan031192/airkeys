@@ -26,8 +26,9 @@ class AirKeysViewModel : ViewModel() {
     var touchpadLocked by mutableStateOf(false); private set
 
     // Hidden keyboard buffer state. The field itself lives in Compose;
-    // we keep the last text here only to compute deltas.
-    var lastText by mutableStateOf(""); private set
+    // it always holds one sentinel space (see TextDelta.computeWithSentinel).
+    // lastText is therefore " " at rest, never "".
+    var lastText by mutableStateOf(" "); private set
 
     init { setStatusListener { status = it } }
     override fun onCleared() { setStatusListener(null); super.onCleared() }
@@ -56,26 +57,20 @@ class AirKeysViewModel : ViewModel() {
         c.flushMouseMovesNow(System.currentTimeMillis())
     }
 
-    /** Called on every hidden-field change, from Compose onValueChange. */
+    /** Called on every hidden-field change, from Compose onValueChange.
+     *  Sentinel-aware: backspace on the sentinel is a real change, so it
+     *  reaches here even when the user-visible field looks empty. */
     fun onHiddenTextChanged(newText: String) {
-        val delta = TextDelta.compute(lastText, newText)
-        lastText = newText
+        val delta = TextDelta.computeWithSentinel(lastText, newText)
+        // Restore-loop guard: the Compose effect resetting the field to
+        // the sentinel must not send anything or increment again.
+        if (delta.deleted == 0 && delta.inserted.isEmpty()) return
+        // Restore the sentinel BEFORE signalling, so the effect's
+        // onValueChange(" ") hits the guard above and stops.
+        lastText = " "
         if (delta.deleted > 0) conn()?.sendBackspace(delta.deleted)
-        if (delta.inserted.isNotEmpty()) {
-            if (stickyModifiers != 0) {
-                // Modifiers + text: send as COMBO per char is wrong for text,
-                // so clear sticky modifiers first is NOT done — instead the
-                // PC tracks held modifiers; for plain text we send TEXT and
-                // let the next special key carry the modifiers.
-            }
-            conn()?.sendText(delta.inserted)
-        }
-        // Clear the hidden buffer after sending so the next keystroke is a
-        // fresh delta. The Compose field resets via resetSignal below.
-        if (delta.deleted > 0 || delta.inserted.isNotEmpty()) {
-            lastText = ""
-            resetSignal++
-        }
+        if (delta.inserted.isNotEmpty()) conn()?.sendText(delta.inserted)
+        resetSignal++
     }
     var resetSignal by mutableStateOf(0); private set
 

@@ -63,25 +63,9 @@ class MainActivity : ComponentActivity() {
         else startService(intent)
     }
 
-    fun connectLan(host: String?, code: String?) {
-        val intent = Intent(this, AirKeysService::class.java).apply {
-            action = AirKeysService.ACTION_CONNECT_LAN
-            if (!host.isNullOrBlank()) putExtra(AirKeysService.EXTRA_HOST, host)
-            if (code != null) putExtra(AirKeysService.EXTRA_CODE, code)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-        else startService(intent)
-    }
-
-    fun connectAuto(code: String?) {
-        val intent = Intent(this, AirKeysService::class.java).apply {
-            action = AirKeysService.ACTION_CONNECT_AUTO
-            if (code != null) putExtra(AirKeysService.EXTRA_CODE, code)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-        else startService(intent)
-    }
-
+    // v1.2: LAN/Auto entry points removed from the UI, as requested —
+    // Bluetooth is the only connection choice offered. The service's
+    // LAN code remains in the repo, unused, for a future re-enable.
     fun disconnect() {
         val intent = Intent(this, AirKeysService::class.java).apply {
             action = AirKeysService.ACTION_DISCONNECT

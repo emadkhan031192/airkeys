@@ -38,6 +38,13 @@ class GestureTest {
         assertEquals(listOf(MouseEvent.Scroll(0, -30)), scroll)
     }
 
+    @Test fun tapToClickOffEmitsNoClick() {
+        val g = TouchpadGestureProcessor(tapToClickEnabled = false)
+        g.onPointer(1, PointerAction.DOWN, 100f, 100f, 1000)
+        assertTrue(g.onPointer(1, PointerAction.UP, 101f, 101f, 1100).isEmpty())
+        assertTrue(g.tapWithFingers(2).isEmpty())
+    }
+
     @Test fun holdDragBeginsOnHold() {
         val g = TouchpadGestureProcessor()
         g.onPointer(1, PointerAction.DOWN, 10f, 10f, 1000)

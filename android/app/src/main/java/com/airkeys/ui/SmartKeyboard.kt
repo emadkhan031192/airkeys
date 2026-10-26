@@ -7,8 +7,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.airkeys.*
+import com.airkeys.R
 
 /**
  * In-app Smart Keyboard: every tap sends a frame immediately, with no
@@ -17,10 +22,21 @@ import com.airkeys.*
  * available for swipe / voice / predictive typing — this is the
  * direct, deterministic alternative when Gboard misbehaves.
  */
+/**
+ * v1.2 fix for "boxes with nothing in them": some devices have no Urdu
+ * font, so Nastaliq glyphs rendered as tofu (□). We now bundle
+ * Noto Nastaliq Urdu (verified: contains U+0627, U+06CC, 378 glyphs)
+ * and use it for every Urdu key, so the keys render on any device.
+ */
+private val UrduFontFamily = FontFamily(Font(R.font.noto_nastaliq_urdu))
+
 @Composable
 fun SmartKeyboardScreen(vm: AirKeysViewModel) {
     var layout by remember { mutableStateOf(SmartLayout.ENGLISH) }
     var shift by remember { mutableStateOf(false) }
+    val isUrdu = layout == SmartLayout.URDU
+    val keyStyle = if (isUrdu) TextStyle(fontFamily = UrduFontFamily, fontSize = 22.sp)
+                   else TextStyle(fontSize = 16.sp)
     Column(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState())) {
         // Modifier row (sticky, shared with the Gboard extra-key row).
         Row {
@@ -35,7 +51,9 @@ fun SmartKeyboardScreen(vm: AirKeysViewModel) {
         // Layout switch + shift.
         Row {
             Button(onClick = { layout = SmartLayout.ENGLISH }, modifier = Modifier.padding(2.dp)) { Text("EN") }
-            Button(onClick = { layout = SmartLayout.URDU }, modifier = Modifier.padding(2.dp)) { Text("اردو") }
+            Button(onClick = { layout = SmartLayout.URDU }, modifier = Modifier.padding(2.dp)) {
+                Text("اردو", style = TextStyle(fontFamily = UrduFontFamily, fontSize = 18.sp))
+            }
             Button(onClick = { layout = SmartLayout.SYMBOLS }, modifier = Modifier.padding(2.dp)) { Text("#@!") }
             Button(onClick = { shift = !shift },
                 colors = if (shift) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
@@ -47,7 +65,10 @@ fun SmartKeyboardScreen(vm: AirKeysViewModel) {
                     Button(onClick = {
                         vm.sendTextDirect(KeyboardLayouts.applyShift(key, shift))
                         if (shift && layout == SmartLayout.ENGLISH) shift = false
-                    }, modifier = Modifier.weight(1f).padding(1.dp)) { Text(key) }
+                    }, modifier = Modifier.weight(1f).padding(1.dp)
+                        .heightIn(min = if (isUrdu) 56.dp else 48.dp)) {
+                        Text(key, style = keyStyle)
+                    }
                 }
             }
         }

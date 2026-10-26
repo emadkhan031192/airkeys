@@ -23,6 +23,17 @@ class TextDeltaTest {
     @Test fun unicodeInsertion() {
         assertEquals(TextDelta(0, "سلام"), TextDelta.compute("", "سلام"))
     }
+    @Test fun sentinelBackspace() {
+        // v1.2: field at rest is " ", backspace deletes it -> one BACKSPACE.
+        assertEquals(TextDelta(1, ""), TextDelta.computeWithSentinel(" ", ""))
+        // Restoring the sentinel sends nothing (no loop).
+        assertEquals(TextDelta(0, ""), TextDelta.computeWithSentinel(" ", " "))
+        // Typing keeps the sentinel prefix; only the new text is sent.
+        assertEquals(TextDelta(0, "a"), TextDelta.computeWithSentinel(" ", " a"))
+        assertEquals(TextDelta(0, "سلام"), TextDelta.computeWithSentinel(" ", " سلام"))
+        // IME replacing the whole field is NOT a backspace.
+        assertEquals(TextDelta(0, "hello"), TextDelta.computeWithSentinel(" ", "hello"))
+    }
 }
 
 class CoalescerTest {

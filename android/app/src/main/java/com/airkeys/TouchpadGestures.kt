@@ -24,6 +24,7 @@ class TouchpadGestureProcessor(
     private val holdMs: Long = 400L,
     private val sensitivity: Float = 1.0f,
     private val palmMinArea: Float = 0f, // reserved: UI passes major-axis; >threshold = palm
+    private val tapToClickEnabled: Boolean = true,
 ) {
     private data class Ptr(val id: Int, var x: Float, var y: Float, var downAt: Long,
                            var moved: Boolean, var startX: Float, var startY: Float)
@@ -45,7 +46,8 @@ class TouchpadGestureProcessor(
                 pointers[id] = Ptr(id, x, y, nowMs, false, x, y)
                 if (countBefore == 0) {
                     // Possible double-tap-drag: second tap down quickly near last tap.
-                    if (pendingDoubleTap && nowMs - lastTapUpMs <= doubleTapMaxMs &&
+                    // Disabled with tap-to-click, since it also auto-clicks.
+                    if (tapToClickEnabled && pendingDoubleTap && nowMs - lastTapUpMs <= doubleTapMaxMs &&
                         hypot(x - lastTapX, y - lastTapY) < 40f) {
                         dragging = true; dragButtonHeld = true
                         out += MouseEvent.Button(0, true)
@@ -83,7 +85,10 @@ class TouchpadGestureProcessor(
                 if (pointers.isEmpty()) {
                     if (dragButtonHeld) { out += MouseEvent.Button(0, false); dragButtonHeld = false; dragging = false }
                     if (scrolling) scrolling = false
-                    if (wasTap) {
+                    if (wasTap && !tapToClickEnabled) {
+                        // Tap-to-click off: a lift is just a lift, never a click.
+                        pendingDoubleTap = false
+                    } else if (wasTap) {
                         // Finger count at tap time is approximated by whether a
                         // second finger was ever present; the UI layer passes
                         // multi-tap via tapWithFingers() instead (see below).
@@ -112,6 +117,7 @@ class TouchpadGestureProcessor(
 
     /** Explicit multi-finger tap (UI detects all fingers down+up quickly). */
     fun tapWithFingers(fingers: Int): List<MouseEvent> {
+        if (!tapToClickEnabled) return emptyList()
         val button = when (fingers) { 2 -> 1; 3 -> 2; else -> 0 }
         pendingDoubleTap = false
         return listOf(MouseEvent.Button(button, true), MouseEvent.Button(button, false))
