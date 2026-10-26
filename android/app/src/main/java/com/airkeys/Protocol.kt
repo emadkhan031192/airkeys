@@ -48,8 +48,10 @@ class SeqValidator {
     fun accept(seq: Int): Boolean {
         if (!seenAny) { seenAny = true; lastSeq = seq; return true }
         if (seq == lastSeq) return false
-        val diff = seq - lastSeq // wraps in Int arithmetic, exactly what we want
-        if (diff <= 0 || diff >= (1 shl 31)) return false
+        // Unsigned 32-bit difference: (1 shl 31) overflows to negative in
+        // Kotlin Int, so compute it as a Long masked to 32 bits instead.
+        val diff = (seq.toLong() - lastSeq.toLong()) and 0xFFFFFFFFL
+        if (diff == 0L || diff >= (1L shl 31)) return false
         lastSeq = seq; return true
     }
     fun reset() { lastSeq = 0; seenAny = false }
