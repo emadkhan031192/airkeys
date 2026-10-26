@@ -214,8 +214,5 @@ fun SmartKeyboardScreen(vm: AirKeysViewModel) {
             Key("↩", { vm.sendEnter() }, contentColor = KeyRed,
                 style = TextStyle(fontSize = 24.sp, color = KeyRed))
         }
-
-
-            modifier = Modifier.padding(4.dp))
     }
 }
